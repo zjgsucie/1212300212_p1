@@ -1,0 +1,72 @@
+《Unix系统分析》2015-2016（1）学期大作业
+
+一、分析以下代码中使用的linux系统调用。要求使用strace工具（参见http://linuxtools-rst.readthedocs.org/zh_CN/latest/tool/strace.html）
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+
+char cmd[256];
+
+void main(){
+	int ret;
+	
+	
+	printf("Hello world, this is Linux!");
+	
+	while(1){
+		printf(">");
+		fgets(cmd,256,stdin);
+		cmd[strlen(cmd)] = 0;
+		
+		if(fork() == 0){
+			execlp(cmd,NULL);
+			perror(cmd);
+			exit(errno);
+		} else {
+			wait(&ret);
+			printf("child process return %d \n",ret);
+		}
+	
+	}
+}	
+1、建立test.c文件
+
+2、使用strace工具分析
+
+
+
+
+
+具体分析:
+execve("./test", ["./test"], [/* 41 vars */]) = 0
+对于命令行下执行的程序，execve(或exec系列调用中的某一个)均为strace输出系统调用中的第一个。strace首先调用fork或clone函数新建一个子进程，然后在子进程中调用exec载入需要执行的程序(这里为./test）
+
+brk(0)                                  = 0x1565000
+以0作为参数调用brk，返回值为内存管理的起始地址(若在子进程中调用malloc，则从0x1565000地址开始分配空间)
+
+access("/etc/ld.so.nohwcap", F_OK)      = -1 ENOENT (No such file or directory)
+调用access函数检验/etc/ld.so.nohwcap是否存在
+
+mmap(NULL, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f650b0e9000
+使用mmap函数进行匿名内存映射，以此来获取8192bytes内存空间，该空间起始地址为0x7f650b0e9000，匿名内存映射就是不涉及具体的文件名,避免了文件的创建及打开,很显然只能用于具有亲缘关系的进程间通信。
+
+open("/etc/ld.so.cache", O_RDONLY)      = 3
+调用open函数尝试打开/etc/ld.so.cache文件，返回文件描述符为3
+
+fstat(3, {st_mode=S_IFREG|0644, st_size=50070, ...}) = 0
+fstat函数获取/etc/ld.so.cache文件信息
+
+close(3)                                = 0
+close关闭文件描述符为3指向的/etc/ld.so.cache文件
+
+read(3,"\177ELF\2\1\1\0\0\0\0\0\0\0\0\0\3\0>\0\1\0\0\0\240\356\1\0\0\0\0\0"..., 832) = 832
+调用read，即读取ELF头信息
+
+mprotect(0x7f650acc1000, 2097152, PROT_NONE) = 0
+使用mprotect函数对0x7f650acc1000,起始的2097152bytes空间进行保护(PROT_NONE参数就是不能访问，对应还有PROT_READ表示可以读取)
+
+munmap(0x7f650b0dc000, 50070)           = 0
+调用munmap函数，将/etc/ld.so.cache文件从内存中去映射，与mmap函数对应
+
+
+
